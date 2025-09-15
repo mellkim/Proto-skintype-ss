@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Genetic Skin Analysis – Final</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+    <div id="root" class="p-4 md:p-6"></div>
+
+    <script type="text/babel" data-presets="react">
+        const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbx2L7xgnQO8a3Hxi9LPAgm7AFyzaIO04jHip4fuM5T_mFV212BgZd9lHHAOZYzTzghW/exec';
+        const SHEETS_TOKEN = 'skincare_app_2025_XyZ9!aB3';   // Code.gs 의 SECRET_TOKEN과 동일
+
+        const { useState, useEffect } = React;
+
+        /* ---------- 아이콘/공통 컴포넌트(기존 유지) ---------- */
+        const Icon = ({ children, className = '' }) => (<span className={'inline-block align-middle ' + className}>{children}</span>);
+        const I = {
+            plus: (p) => <Icon {...p}>＋</Icon>, minus: (p) => <Icon {...p}>−</Icon>, up: (p) => <Icon {...p}>📈</Icon>, warn: (p) => <Icon {...p}>⚠️</Icon>,
+            cal: (p) => <Icon {...p}>📅</Icon>, chevR: (p) => <Icon {...p}>›</Icon>, chart: (p) => <Icon {...p}>📊</Icon>, info: (p) => <Icon {...p}>ℹ️</Icon>,
+            spark: (p) => <Icon {...p}>✨</Icon>, beaker: (p) => <Icon {...p}>🧪</Icon>, bag: (p) => <Icon {...p}>🛍️</Icon>, bulb: (p) => <Icon {...p}>💡</Icon>, close: (p) => <Icon {...p}>✕</Icon>,
+            trash: (p) => <Icon {...p}>🗑️</Icon>, user: (p) => <Icon {...p}>👤</Icon>, key: (p) => <Icon {...p}>🔑</Icon>, logout: (p) => <Icon {...p}>🚪</Icon>,
+        };
+
+        const BIOMARKER_DETAILS = {
+            PINK1: { fullName: 'PINK1 (PTEN-induced kinase 1)', function: '미토콘드리아 품질 관리 및 세포 에너지 대사.', mechanism: '마이토파지 조절.', ingredients: [{ name: '나이아신아마이드', description: '미토콘드리아 기능 향상', concentration: '2-5%' }, { name: '레티놀', description: '세포 재생 촉진', concentration: '0.25-1%' }], products: ['더 오디너리 나이아신아마이드 10%', '로레알 레비탈리프트 나이트 세럼'], tips: ['충분한 수면', '항산화 식품 섭취'] },
+            COL1A1: { fullName: 'COL1A1', function: '콜라겐 합성', mechanism: '제1형 콜라겐 α1 사슬 암호화.', ingredients: [{ name: '비타민 C', description: '콜라겐 합성 촉진', concentration: '10-20%' }], products: ['CE페린 비타민C 세럼'], tips: ['비타민 C 음식 섭취'] },
+            MSN: { fullName: 'MSN (Moesin)', function: '세포막 안정성', mechanism: '세포골격 연결', ingredients: [{ name: '세라마이드', description: '세포막 강화', concentration: '2-5%' }], products: ['CeraVe 모이스처라이징 크림'], tips: ['과도한 세안 피하기'] },
+            HAS2: { fullName: 'HAS2', function: '히알루론산 합성', mechanism: '피부 수분 공급', ingredients: [{ name: '히알루론산', description: '수분 공급', concentration: '0.5-2%' }], products: ['더 오디너리 히알루론산 2% + B5'], tips: ['충분한 물 섭취'] },
+            FLG: { fullName: 'FLG', function: '각질층 보습 인자', mechanism: '천연보습인자 생성', ingredients: [{ name: '우레아', description: '보습인자 보충', concentration: '5-10%' }], products: ['유세린 UreaRepair 크림'], tips: ['짧은 샤워'] },
+            AQP3: { fullName: 'AQP3', function: '수분 통로', mechanism: '물 분자 이동', ingredients: [{ name: '글리세린', description: '수분 전달 촉진', concentration: '5-15%' }], products: ['뉴트로지나 하이드라부스트 세럼'], tips: ['하루 2-3L 수분'] },
+            SPINK5: { fullName: 'SPINK5', function: '장벽 보호', mechanism: '세린 프로테아제 억제', ingredients: [{ name: '알란토인', description: '진정', concentration: '0.5-2%' }], products: ['라로슈포제 톨레리안 케어'], tips: ['자극 성분 피하기'] },
+            MLANA: { fullName: 'MLANA', function: '멜라닌 생성', mechanism: '멜라노사이트 성숙', ingredients: [{ name: '비타민 C', description: '멜라닌 억제', concentration: '10-20%' }], products: ['클리니크 이븐 베터 세럼'], tips: ['매일 자차'] },
+            TFAP2A: { fullName: 'TFAP2A', function: '색소 전사 인자', mechanism: '멜라노사이트 분화', ingredients: [{ name: '나이아신아마이드', description: '멜라닌 전달 억제', concentration: '5-10%' }], products: ['더 오디너리 알파 아르부틴 2%'], tips: ['꾸준한 자차'] },
+            SOD1: { fullName: 'SOD1', function: '항산화', mechanism: '활성산소 제거', ingredients: [{ name: '비타민 E', description: '항산화 시너지', concentration: '0.5-1%' }], products: ['SkinCeuticals CE Ferulic'], tips: ['항산화 음식'] },
+            VDR: { fullName: 'VDR', function: '비타민 D 수용체', mechanism: '세포 기능 조절', ingredients: [{ name: '비타민 D3', description: 'VDR 활성화', concentration: '1000-4000IU' }], products: ['네이처메이드 비타민 D3'], tips: ['적당한 일광욕'] },
+        };
+
+        const GENE_ORDER = ['PINK1', 'COL1A1', 'MSN', 'HAS2', 'FLG', 'AQP3', 'SPINK5', 'MLANA', 'TFAP2A', 'SOD1', 'VDR'];
+
+
+        // 권장 성분 → 검색 키워드 매핑 (필요 시 자유롭게 보강)
+        const INGREDIENT_QUERY_MAP = {
+            '나이아신아마이드': '나이아신아마이드 세럼',
+            '레티놀': '레티놀 세럼',
+            '비타민 C': '비타민C 세럼',
+            '세라마이드': '세라마이드 크림',
+            '히알루론산': '히알루론산 세럼',
+            '우레아': '우레아 크림',
+            '글리세린': '글리세린 크림',
+            '알란토인': '알란토인 크림',
+            '비타민 E': '비타민E 세럼',
+            '비타민 D3': '비타민D3 보충제'
+        };
+
+        // Z-score → 심각도 분류
+        function classifySeverity(value, mean, sd) {
+            if (sd === 0 || sd == null) return { z: 0, level: 'maintain' };
+            const z = Math.abs((value - mean) / sd);
+            if (z > 2) return { z, level: 'urgent' };      // 긴급 개선
+            if (z > 1) return { z, level: 'caution' };     // 주의 관찰
+            return { z, level: 'maintain' };               // 현재 상태 유지
+        }
+
+        // currentData → 평탄화 리스트
+        function flattenMarkers(current) {
+            const list = [];
+            if (!current?.biomarkers) return list;
+            for (const cat of ['aging', 'dryness', 'pigmentation']) {
+                for (const m of (current.biomarkers[cat] || [])) {
+                    list.push({
+                        category: cat,
+                        gene: m.gene,
+                        name: m.name,
+                        value: Number(m.value),
+                        mean: Number(m.koreanMean),
+                        sd: Number(m.stdDev),
+                    });
+                }
+            }
+            return list;
+        }
+
+        // 추천 생성 (BIOMARKER_DETAILS 활용)
+        function buildRecommendations(current) {
+            const items = flattenMarkers(current).map(m => {
+                const cls = classifySeverity(m.value, m.mean, m.sd);
+                const info = (typeof BIOMARKER_DETAILS !== 'undefined') ? BIOMARKER_DETAILS[m.gene] || {} : {};
+                return {
+                    ...m,
+                    z: cls.z,
+                    level: cls.level,
+                    fullName: info.fullName || m.gene,
+                    ingredients: info.ingredients || [],
+                    tips: info.tips || [],
+                };
+            });
+
+            return {
+                urgent: items.filter(i => i.level === 'urgent').sort((a, b) => b.z - a.z),
+                caution: items.filter(i => i.level === 'caution').sort((a, b) => b.z - a.z),
+                maintain: items.filter(i => i.level === 'maintain').sort((a, b) => a.gene.localeCompare(b.gene)),
+            };
+        }
+
+        // 서버(Apps Script) 경유로 네이버 쇼핑 검색
+        async function apiSearchProducts(query, display = 6) {
+            const payload = { token: SHEETS_TOKEN, action: 'searchProducts', query, display };
+            const res = await fetch(SHEETS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                const err = String(data.error || 'search_failed');
+                // ❗ 주요 에러들 가독성 높이기
+                if (err === 'missing_credentials') {
+                    throw new Error('네이버 API 자격증명이 설정되지 않았습니다. 관리자에게 문의하세요.');
+                }
+                if (err.startsWith('upstream_error_')) {
+                    throw new Error('네이버 API 호출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+                }
+                if (err === 'missing_query') {
+                    throw new Error('검색어가 비어 있습니다.');
+                }
+                if (err === 'unauthorized') {
+                    throw new Error('인증 토큰이 올바르지 않습니다.');
+                }
+                throw new Error(err);
+            }
+            return data.items || [];
+        }
+        function RecommendationsView({ onBack, current }) {
+            // 안전 가드
+            const safeCurrent = current || { biomarkers: { aging: [], dryness: [], pigmentation: [] } };
+
+            // ① Z-score 기반 개인화 추천(긴급/주의/유지)
+            const rec = React.useMemo(() => buildRecommendations(safeCurrent), [safeCurrent]);
+
+            // ② 성분 → 실시간 상품 검색 상태
+            const [selectedIngredient, setSelectedIngredient] = React.useState('');
+            const [loading, setLoading] = React.useState(false);
+            const [products, setProducts] = React.useState([]);
+
+            async function handleSearch(ingredientName) {
+                const q = INGREDIENT_QUERY_MAP[ingredientName] || ingredientName;
+                try {
+                    setLoading(true);
+                    setProducts([]);
+                    const items = await apiSearchProducts(q, 8);
+                    setProducts(items);
+                } catch (e) {
+                    alert(e.message || '상품 추천을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            // 현재 추천 목록에서 “권장 성분”만 평탄화해 한 번에 선택할 수 있는 필터 버튼(UI)
+            const allIng = React.useMemo(() => {
+                const result = [];
+                [...rec.urgent, ...rec.caution, ...rec.maintain].forEach(x => {
+                    (x.ingredients || []).forEach(i => result.push(i.name));
+                });
+                return Array.from(new Set(result));
+            }, [rec]);
+
+            function Section({ title, color, items, emptyText }) {
+                return (
+                    <Card className="p-6">
+                        <h4 className={`font-bold mb-4 ${color.title}`}>{title}</h4>
+                        {items.length === 0 ? (
+                            <p className="text-sm text-slate-500">{emptyText}</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {items.map((it, idx) => (
+                                    <div key={it.gene + idx} className={`p-4 rounded-xl border ${color.box}`}>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="font-semibold text-slate-900">
+                                                {it.gene}
+                                                <span className="ml-2 text-slate-500 text-sm">{it.fullName}</span>
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                Z: {it.z.toFixed(2)} · ΔCt: {it.value} (평균 {it.mean})
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-slate-700 mb-2">{it.name}</div>
+
+                                        {/* 권장 성분 pill (클릭 시 상품 검색) */}
+                                        {it.ingredients.length > 0 && (
+                                            <div className="text-sm">
+                                                <div className="font-medium mb-2">권장 성분</div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {it.ingredients.map((ing, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => { setSelectedIngredient(ing.name); handleSearch(ing.name); }}
+                                                            className={`px-2.5 py-1 rounded-full border text-xs ${selectedIngredient === ing.name ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                                                            title={ing.description + (ing.concentration ? ` (${ing.concentration})` : '')}
+                                                        >
+                                                            {ing.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </Card>
+                );
+            }
+
+            // 상품 추천 그리드
+            function ProductGrid() {
+                if (!selectedIngredient) {
+                    return <p className="text-sm text-slate-500">위의 권장 성분 버튼을 눌러 추천 상품을 조회하세요.</p>;
+                }
+                if (loading) return <p className="text-sm text-slate-500">추천 상품을 불러오는 중…</p>;
+                if (products.length === 0) return <p className="text-sm text-slate-500">검색 결과가 없습니다.</p>;
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {products.map((p, idx) => (
+                            <a key={idx} href={p.link} target="_blank" rel="noopener noreferrer" className="p-4 rounded-xl border bg-white hover:shadow-md transition">
+                                <div className="flex gap-3">
+                                    {p.image && <img src={p.image} alt="" className="w-20 h-20 object-cover rounded-lg border" />}
+                                    <div className="flex-1">
+                                        {/* 네이버 응답 title에 HTML 태그가 섞여있어서 dangerouslySetInnerHTML 사용 */}
+                                        <div className="text-sm font-semibold text-slate-900" dangerouslySetInnerHTML={{ __html: p.title }} />
+                                        <div className="text-xs text-slate-500 mt-1">{p.brand || p.mallName || '알수없음'}</div>
+                                        {p.lprice && <div className="text-sm font-bold text-indigo-600 mt-1">{Number(p.lprice).toLocaleString()}원 ~</div>}
+                                    </div>
+                                </div>
+                            </a>
+                        ))}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+                    <div className="max-w-4xl mx-auto p-4">
+                        <Card className="p-6 mb-6">
+                            <div className="flex items-center justify-between">
+                                <button onClick={onBack} className="flex items-center gap-2 text-slate-600">
+                                    <span className="rotate-180">›</span><span>뒤로</span>
+                                </button>
+                                <h1 className="text-xl font-bold text-slate-900">💡 맞춤 추천</h1>
+                            </div>
+                        </Card>
+
+                        {/* 개인화 추천 3단계 */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Section title="🚨 긴급 개선" color={{ title: 'text-rose-800', box: 'border-rose-200 bg-rose-50' }}
+                                items={rec.urgent} emptyText="긴급 개선이 필요한 항목이 없습니다." />
+                            <Section title="⚠️ 주의 관찰" color={{ title: 'text-amber-800', box: 'border-amber-200 bg-amber-50' }}
+                                items={rec.caution} emptyText="주의 관찰이 필요한 항목이 없습니다." />
+                            <Section title="✅ 현재 상태 유지" color={{ title: 'text-emerald-800', box: 'border-emerald-200 bg-emerald-50' }}
+                                items={rec.maintain} emptyText="유지에 해당하는 항목이 없습니다." />
+                        </div>
+
+                        {/* 성분 전체에서 한 번에 고를 수 있는 필터(선택은 아래 ProductGrid와 공유) */}
+                        {allIng.length > 0 && (
+                            <Card className="p-6 mt-6">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-bold text-slate-900">🛍️ 성분별 추천 상품(실시간)</h4>
+                                    {selectedIngredient && <span className="text-sm text-slate-600">선택 성분: <b>{selectedIngredient}</b></span>}
+                                </div>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {allIng.map(name => (
+                                        <button key={name}
+                                            onClick={() => { setSelectedIngredient(name); handleSearch(name); }}
+                                            className={`px-3 py-1.5 rounded-full text-sm border ${selectedIngredient === name ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                            {name}
+                                        </button>
+                                    ))}
+                                </div>
+                                <ProductGrid />
+                            </Card>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        /* ---------- API 래퍼 ---------- */
+        async function apiGetReports(userId) {
+            const url = userId ? `${SHEETS_API_URL}?userId=${encodeURIComponent(userId)}` : SHEETS_API_URL;
+            const res = await fetch(url, { method: 'GET' });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'GET failed');
+            const items = (data.items || []).map(r => {
+                const base = {
+                    id: String(r.id || ''), date: String(r.date || ''), week: Number(r.week || 0),
+                    title: String(r.title || ''), overallScore: Number(r.overallScore || 0),
+                    status: String(r.status || 'completed'), userId: String(r.userId || '')
+                };
+                const genes = {};
+                GENE_ORDER.forEach(g => { genes[g] = (r[g] === undefined || r[g] === '') ? null : Number(r[g]); });
+                return { ...base, genes };
+            });
+            items.sort((a, b) => b.date.localeCompare(a.date));
+            return items;
+        }
+
+        async function apiCreateReport(newReport) {
+            const payload = { token: SHEETS_TOKEN, action: 'create', ...newReport };
+            const res = await fetch(SHEETS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'POST failed');
+            return true;
+        }
+
+        async function apiDeleteReport(id, userId) {
+            const payload = { token: SHEETS_TOKEN, action: 'delete', id, userId };
+            const res = await fetch(SHEETS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'DELETE failed');
+            return true;
+        }
+
+        async function apiSignup({ email, name, password }) {
+            const res = await fetch(SHEETS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ token: SHEETS_TOKEN, action: 'signup', email, name, password })
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'SIGNUP failed');
+            return data.user;
+        }
+
+        async function apiLogin({ email, password }) {
+            const res = await fetch(SHEETS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ token: SHEETS_TOKEN, action: 'login', email, password })
+            });
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || 'LOGIN failed');
+            return data.user;
+        }
+
+        /* ---------- 점수 계산(기존 유지) ---------- */
+        function calcOverallScoreFromSample(data) {
+            const all = [...data.biomarkers.aging, ...data.biomarkers.dryness, ...data.biomarkers.pigmentation];
+            const toLevel = (m) => Math.max(0, Math.min(100, (100 - m.value) / 2));
+            return Math.round(all.reduce((s, m) => s + toLevel(m), 0) / all.length);
+        }
+
+        /* ---------- 공통 UI ---------- */
+        function Card({ children, className = '', ...props }) {
+            const clickable = typeof props.onClick === 'function';
+            const base = 'bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 ';
+            return (
+                <div
+                    {...props}
+                    className={base + className}
+                    role={clickable ? 'button' : props.role}
+                    tabIndex={clickable ? 0 : props.tabIndex}
+                    onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onClick?.(e); } } : props.onKeyDown}
+                >{children}</div>
+            );
+        }
+
+        /* ---------- 카드/모달(기존 유지) ---------- */
+        function BiomarkerCard({ marker, onSelectGene }) {
+            const z = Math.abs((marker.value - marker.koreanMean) / marker.stdDev);
+            const status = z <= 1 ? 'normal' : z <= 2 ? 'warning' : 'critical';
+            const icon = status === 'normal' ? <I.minus className="w-4 h-4 text-emerald-500" /> : status === 'warning' ? <I.up className="w-4 h-4 text-amber-500" /> : <I.warn className="w-4 h-4 text-rose-500" />;
+            const color = status === 'normal' ? 'border-emerald-200 from-emerald-50 to-cyan-50' : status === 'warning' ? 'border-amber-200 from-amber-50 to-orange-50' : 'border-rose-200 from-rose-50 to-pink-50';
+            const expressionLevel = Math.max(0, Math.min(100, (100 - marker.value) / 2));
+            return (
+                <div className={`p-4 rounded-2xl border-2 bg-gradient-to-br ${color} transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-[1.02]`} onClick={() => onSelectGene?.(marker.gene)}>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">{icon}<span className="font-bold text-slate-800 text-sm tracking-wide">{marker.gene}</span></div>
+                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full font-medium">ΔCt</span>
+                    </div>
+                    <div className="mb-3"><span className="text-xl font-bold text-slate-900">{marker.value}</span><span className="text-xs text-slate-500 ml-2">(평균: {marker.koreanMean})</span></div>
+                    <div className="text-xs text-slate-600 mb-3 font-medium">{marker.name}</div>
+                    <div className="w-full bg-slate-200 rounded-full h-2.5"><div className="h-2.5 rounded-full transition-all duration-1000" style={{ width: `${expressionLevel}%`, background: 'linear-gradient(90deg,#6366f1,#a855f7)' }} /></div>
+                    <div className="text-xs text-slate-500 mt-2 text-center font-medium">발현 레벨: {Math.round(expressionLevel)}%</div>
+                </div>
+            );
+        }
+
+        function GeneDetailModal({ gene, onClose }) {
+            const info = BIOMARKER_DETAILS[gene] || {};
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+                        <div className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+                            <h3 className="font-bold">{gene} 상세</h3>
+                            <button className="px-3 py-1.5 bg-white/20 rounded-lg" onClick={onClose}><I.close /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <div className="text-slate-900 font-bold mb-1">{info.fullName || gene}</div>
+                                <div className="text-slate-700 text-sm">{info.function}</div>
+                                <div className="text-slate-500 text-sm">{info.mechanism}</div>
+                            </div>
+                            {info.ingredients && (
+                                <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+                                    <div className="font-semibold text-indigo-800 mb-2">권장 성분</div>
+                                    <ul className="text-sm text-indigo-900 list-disc pl-5 space-y-1">
+                                        {info.ingredients.map((it, i) => (<li key={i}>{it.name} — {it.description} ({it.concentration})</li>))}
+                                    </ul>
+                                </div>
+                            )}
+                            {info.tips && (
+                                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                                    <div className="font-semibold text-emerald-800 mb-2">관리 팁</div>
+                                    <ul className="text-sm text-emerald-900 list-disc pl-5 space-y-1">
+                                        {info.tips.map((t, i) => (<li key={i}>{t}</li>))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ---------- 샘플 입력 템플릿 ---------- */
+        const SAMPLE_CURRENT_DATA = {
+            userId: '', analysisId: 'analysis456', timestamp: new Date(), week: 0,
+            biomarkers: {
+                aging: [{ gene: 'PINK1', value: -15, koreanMean: -10, stdDev: 8, name: '미토콘드리아 기능' }, { gene: 'COL1A1', value: 25, koreanMean: 15, stdDev: 12, name: '콜라겐 생성' }, { gene: 'MSN', value: -5, koreanMean: 0, stdDev: 6, name: '세포막 안정성' }, { gene: 'HAS2', value: 30, koreanMean: 20, stdDev: 10, name: '히알루론산 합성' }],
+                dryness: [{ gene: 'FLG', value: 40, koreanMean: 25, stdDev: 15, name: '필라그린' }, { gene: 'AQP3', value: -20, koreanMean: -15, stdDev: 8, name: '아쿠아포린-3' }, { gene: 'SPINK5', value: 10, koreanMean: 5, stdDev: 7, name: '세린 프로테아제 억제' }],
+                pigmentation: [{ gene: 'MLANA', value: -25, koreanMean: -20, stdDev: 9, name: '멜라닌 생성' }, { gene: 'TFAP2A', value: 15, koreanMean: 10, stdDev: 8, name: '전사인자 AP-2α' }, { gene: 'SOD1', value: -10, koreanMean: -5, stdDev: 6, name: '항산화 효소' }, { gene: 'VDR', value: 35, koreanMean: 20, stdDev: 12, name: '비타민D 수용체' }],
+            }
+        };
+
+        function buildDataFromReport(report) {
+            const clone = JSON.parse(JSON.stringify(SAMPLE_CURRENT_DATA));
+            const lookup = (g) => (report?.genes?.[g] ?? null);
+            const apply = (arr) => arr.map(m => ({ ...m, value: Number(lookup(m.gene) ?? m.value) }));
+            clone.biomarkers.aging = apply(clone.biomarkers.aging);
+            clone.biomarkers.dryness = apply(clone.biomarkers.dryness);
+            clone.biomarkers.pigmentation = apply(clone.biomarkers.pigmentation);
+            return clone;
+        }
+
+        /* ---------- 입력 모달(기존 유지 + 제목 필드 추가 가능 시 확장) ---------- */
+        function NewAnalysisModal({ initialData, onCancel, onConfirm, saving }) {
+            function makeBlank(d) {
+                const next = JSON.parse(JSON.stringify(d));
+                ['aging', 'dryness', 'pigmentation'].forEach(cat => {
+                    next.biomarkers[cat] = next.biomarkers[cat].map(m => ({ ...m, value: '' }));
+                });
+                next.title = '';
+                return next;
+            }
+            const [draft, setDraft] = React.useState(() => makeBlank(initialData));
+            function setVal(cat, gene, value) {
+                setDraft(prev => {
+                    const next = JSON.parse(JSON.stringify(prev));
+                    const arr = next.biomarkers[cat];
+                    const i = arr.findIndex(m => m.gene === gene);
+                    if (i >= 0) arr[i].value = value;
+                    return next;
+                });
+            }
+            function handleSave() {
+                const cloned = JSON.parse(JSON.stringify(draft));
+                if (!String(cloned.title || '').trim()) { alert('제목을 입력하세요.'); return; }
+                for (const cat of ['aging', 'dryness', 'pigmentation']) {
+                    for (const m of cloned.biomarkers[cat]) {
+                        const v = String(m.value).trim();
+                        if (v === '' || isNaN(Number(v))) { alert(`${m.gene} 값에 숫자를 입력하세요.`); return; }
+                        m.value = Number(v);
+                    }
+                }
+                onConfirm(cloned);
+            }
+
+            const cats = [['aging', '피부 노화'], ['dryness', '피부 건조'], ['pigmentation', '피부 색소']];
+
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                        <div className="sticky top-0 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-t-2xl">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold">새 분석 값 입력</h2>
+                                <div className="flex gap-2">
+                                    <button onClick={onCancel} className="px-3 py-1.5 bg-white/20 rounded-lg" disabled={saving}>취소</button>
+                                    <button onClick={handleSave} className="px-3 py-1.5 bg-white text-indigo-700 rounded-lg font-semibold disabled:opacity-60" disabled={saving}>{saving ? '저장 중입니다…' : '저장'}</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-8">
+                            <div className="p-4 rounded-xl border bg-slate-50">
+                                <label className="text-sm text-slate-600">제목</label>
+                                <input type="text" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" placeholder="예) 1주차 베이스라인" value={draft.title} onChange={e => setDraft(prev => ({ ...prev, title: e.target.value }))} />
+                            </div>
+
+                            {cats.map(([key, label]) => (
+                                <div key={key}>
+                                    <h3 className="font-bold text-slate-900 mb-3">{label}</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {draft.biomarkers[key].map(m => (
+                                            <div key={m.gene} className="p-4 rounded-xl border bg-slate-50">
+                                                <div className="font-semibold text-slate-800 mb-2">{m.gene} <span className="text-slate-500 text-sm ml-1">{m.name}</span></div>
+                                                <label className="text-sm text-slate-600">ΔCt 값</label>
+                                                <input type="number" step="1" className="mt-1 w-full border rounded-lg px-3 py-2 bg-white" placeholder="숫자를 입력하세요" value={m.value} onChange={e => setVal(key, m.gene, e.target.value)} />
+                                                <div className="text-xs text-slate-500 mt-2">한국인 평균 {m.koreanMean}, 표준편차 {m.stdDev}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ---------- 뷰들(기존 유지) ---------- */
+        function ReportsListView({ reports, onOpenReport, onOpenComparison, onCreateNew, loading, user, onLogout }) {
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+                    <div className="max-w-4xl mx-auto p-4">
+                        <Card className="p-6 mb-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">🧬 피부 유전자 분석</h1>
+                                    <p className="text-slate-600 mt-1">나의 분석 기록</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="px-3 py-2 bg-slate-100 rounded-xl text-sm text-slate-700 flex items-center gap-2"><I.user /> <span className="font-medium">{user?.name || user?.email}</span></div>
+                                    <button className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-sm flex items-center gap-1" onClick={onLogout}><I.logout /> 로그아웃</button>
+                                    <button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 hover:shadow-lg disabled:opacity-50" onClick={onCreateNew} disabled={loading}><I.plus /> <span>{loading ? '저장 중…' : '새 분석'}</span></button>
+                                </div>
+                            </div>
+                        </Card>
+
+                        {reports.length === 0 ? (
+                            <Card className="p-6 text-center text-slate-600">
+                                {loading ? '불러오는 중…' : '아직 저장된 분석이 없습니다.'}
+                            </Card>
+                        ) : (
+                            <div className="space-y-4">
+                                {reports.map(r => (
+                                    <Card key={r.id} className="p-6 cursor-pointer hover:shadow-xl transition hover:scale-[1.01]" onClick={() => onOpenReport(r)}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center"><span className="text-white font-bold text-sm">{r.week}주</span></div>
+                                                <div>
+                                                    <h3 className="font-bold text-slate-900 text-lg">{r.title || '제목 없음'}</h3>
+                                                    <p className="text-slate-600 flex items-center mt-1"><I.cal className="mr-1" /> {r.date ? new Date(r.date).toLocaleDateString('ko-KR') : '-'}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                    <div className="text-2xl font-bold text-indigo-600">{r.overallScore}</div>
+                                                    <div className="text-xs text-slate-500 font-medium">종합점수</div>
+                                                </div>
+                                                <I.chevR className="text-slate-400" />
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="mt-8">
+                            <Card className="p-6 text-center cursor-pointer hover:shadow-xl" onClick={onOpenComparison}>
+                                <div className="flex items-center justify-center gap-2"><I.chart className="text-indigo-600" /> <span className="font-semibold text-slate-800 text-lg">전체 히스토리 차트 보기</span></div>
+                            </Card>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function AnalysisResultView({ data, report, onBack, onOpenComparison, onOpenRecommendations, onOpenRoutine, onSelectGene, onDelete }) {
+            const overallScore = report?.overallScore ?? 78;
+            const CategorySection = ({ title, markers, icon }) => (
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4"><span className="text-2xl">{icon}</span><h3 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h3></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{markers.map(m => (<BiomarkerCard key={m.gene} marker={m} onSelectGene={onSelectGene} />))}</div>
+                </div>
+            );
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+                    <div className="max-w-4xl mx-auto p-4">
+                        <Card className="p-6 mb-6">
+                            <div className="flex items-center justify-between">
+                                <button onClick={onBack} className="flex items-center gap-2 text-slate-600 hover:text-slate-800"><span className="rotate-180"><I.chevR /></span><span className="font-medium">리포트 목록</span></button>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={onDelete} className="px-3 py-2 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 flex items-center gap-1"><I.trash /> 삭제</button>
+                                    <div className="text-right">
+                                        <h1 className="text-xl font-bold text-slate-900">{report?.title || '분석 결과'}</h1>
+                                        <p className="text-slate-600 text-sm">{report?.date ? new Date(report.date).toLocaleDateString('ko-KR') : ''}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-8 mb-8 text-white shadow-2xl">
+                            <div className="text-center">
+                                <div className="text-6xl font-bold text-white mb-4 tracking-tight">{overallScore}</div>
+                                <div className="text-xl opacity-90 mb-2 font-medium">종합 유전자 점수</div>
+                                <div className="text-sm text-indigo-100">11개 바이오마커 기준</div>
+                                <div className="w-full bg-white/20 rounded-full h-4 mt-6"><div className="bg-gradient-to-r from-yellow-400 to-orange-400 h-4 rounded-full transition-all duration-1000" style={{ width: `${overallScore}%` }} /></div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-8">
+                            <CategorySection title="피부 노화" markers={data.biomarkers.aging} icon="⏳" />
+                            <CategorySection title="피부 건조" markers={data.biomarkers.dryness} icon="💧" />
+                            <CategorySection title="피부 색소" markers={data.biomarkers.pigmentation} icon="🎨" />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mt-8">
+                            <Card className="p-6 text-center cursor-pointer hover:shadow-xl" onClick={onOpenComparison}>
+                                <div className="flex items-center justify-center gap-2"><I.chart className="text-indigo-600" /> <span className="font-semibold text-slate-800">비교 차트</span></div>
+                            </Card>
+                            <Card className="p-6 text-center cursor-pointer bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl" onClick={onOpenRecommendations}>
+                                <div className="flex items-center justify-center gap-2"><I.info /> <span className="font-semibold">맞춤 추천</span></div>
+                            </Card>
+                        </div>
+
+                        <div className="mt-4">
+                            <Card className="p-6 text-center cursor-pointer bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-xl" onClick={onOpenRoutine}>
+                                <div className="flex items-center justify-center gap-2"><I.spark /> <span className="font-semibold">🧴 맞춤 루틴 빌더</span></div>
+                            </Card>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ComparisonView({ onBack, reports, current }) {
+            const radarRef = React.useRef(null);
+            const lineRef = React.useRef(null);
+            const radarChartRef = React.useRef(null);
+            const lineChartRef = React.useRef(null);
+
+            // 11개 유전자 순서(프론트/시트 공통)
+            const GENE_ORDER = ['PINK1', 'COL1A1', 'MSN', 'HAS2', 'FLG', 'AQP3', 'SPINK5', 'MLANA', 'TFAP2A', 'SOD1', 'VDR'];
+
+            // 현재 화면 데이터(current)에서 유전자 값 나열
+            function getGeneSeriesFromCurrent() {
+                if (!current) return Array(GENE_ORDER.length).fill(null);
+                const v = {};
+                ['aging', 'dryness', 'pigmentation'].forEach(cat => {
+                    (current.biomarkers?.[cat] || []).forEach(m => { v[m.gene] = Number(m.value); });
+                });
+                return GENE_ORDER.map(g => (typeof v[g] === 'number' ? v[g] : null));
+            }
+
+            // 리포트들에서 (date, overallScore) 시퀀스
+            function getScoreTimeline() {
+                const sorted = [...(reports || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                const labels = sorted.map(r => (r.date ? new Date(r.date).toLocaleDateString('ko-KR') : ''));
+                const scores = sorted.map(r => Number(r.overallScore || 0));
+                return { labels, scores };
+            }
+
+            React.useEffect(() => {
+                // Radar
+                const geneValues = getGeneSeriesFromCurrent();
+                const ctxR = radarRef.current?.getContext('2d');
+                if (ctxR) {
+                    // 기존 인스턴스 clean-up
+                    if (radarChartRef.current) radarChartRef.current.destroy();
+                    radarChartRef.current = new Chart(ctxR, {
+                        type: 'radar',
+                        data: {
+                            labels: GENE_ORDER,
+                            datasets: [{
+                                label: '현재 분석 (ΔCt)',
+                                data: geneValues,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            animation: true,
+                            scales: {
+                                r: {
+                                    angleLines: { display: true },
+                                    suggestedMin: Math.min(...geneValues.filter(n => typeof n === 'number'), 0),
+                                    suggestedMax: Math.max(...geneValues.filter(n => typeof n === 'number'), 10),
+                                    ticks: { display: true }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: true }
+                            }
+                        }
+                    });
+                }
+
+                // Line
+                const { labels, scores } = getScoreTimeline();
+                const ctxL = lineRef.current?.getContext('2d');
+                if (ctxL) {
+                    if (lineChartRef.current) lineChartRef.current.destroy();
+                    lineChartRef.current = new Chart(ctxL, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [{
+                                label: '종합 점수 추이',
+                                data: scores,
+                                tension: 0.25,
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            animation: true,
+                            scales: {
+                                y: { suggestedMin: 0, suggestedMax: 100 }
+                            },
+                            plugins: {
+                                legend: { display: true }
+                            }
+                        }
+                    });
+                }
+
+                // 언마운트 시 정리
+                return () => {
+                    if (radarChartRef.current) radarChartRef.current.destroy();
+                    if (lineChartRef.current) lineChartRef.current.destroy();
+                };
+            }, [reports, current]);
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+                    <div className="max-w-4xl mx-auto p-4">
+                        <Card className="p-6 mb-6">
+                            <div className="flex items-center justify-between">
+                                <button onClick={onBack} className="flex items-center gap-2 text-slate-600">
+                                    <span className="rotate-180">›</span>
+                                    <span>뒤로</span>
+                                </button>
+                                <h1 className="text-xl font-bold text-slate-900">📊 비교 분석</h1>
+                            </div>
+                        </Card>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Card className="p-6">
+                                <h4 className="font-bold text-slate-900 mb-3">🎯 레이더 차트 (현재 분석)</h4>
+                                <canvas ref={radarRef} height="260"></canvas>
+                            </Card>
+
+                            <Card className="p-6">
+                                <h4 className="font-bold text-slate-900 mb-3">📈 종합 점수 타임라인</h4>
+                                <canvas ref={lineRef} height="260"></canvas>
+                            </Card>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ---------- 로그인/회원가입 ---------- */
+        function AuthView({ onAuthed }) {
+            const [mode, setMode] = useState('login'); // 'login' | 'signup'
+            const [email, setEmail] = useState('');
+            const [name, setName] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [errorMsg, setErrorMsg] = useState('');  // ⬅️ 추가: 에러 메시지 상태
+
+            async function handleSubmit(e) {
+                e.preventDefault();
+                if (loading) return;
+                setErrorMsg(''); // 이전 에러 초기화
+                try {
+                    setLoading(true);
+                    if (mode === 'signup') {
+                        const user = await apiSignup({ email, name, password });
+                        onAuthed(user);
+                    } else {
+                        const user = await apiLogin({ email, password });
+                        onAuthed(user);
+                    }
+                } catch (err) {
+                    const msg = String(err?.message || err || '');
+                    // ⬇️ 에러 코드에 따라 사용자 친화적 문구 노출
+                    if (msg === 'wrong_password') {
+                        setErrorMsg('비밀번호가 잘못되었습니다.');
+                    } else if (msg === 'no_such_email') {
+                        setErrorMsg('등록되지 않은 이메일입니다.');
+                    } else if (msg === 'missing_email_or_password') {
+                        setErrorMsg('이메일과 비밀번호를 모두 입력해주세요.');
+                    } else {
+                        // 알 수 없는 오류는 안내 후 유지
+                        alert('로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+                    }
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h1 className="text-xl font-bold text-slate-900">{mode === 'signup' ? '회원가입' : '로그인'}</h1>
+                            <button className="text-sm text-indigo-600" onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setErrorMsg(''); }}>
+                                {mode === 'signup' ? '이미 계정이 있으신가요? 로그인' : '처음이신가요? 회원가입'}
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="flex items-center gap-2"><I.user /><input type="email" className="w-full border rounded-lg px-3 py-2" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)} required /></div>
+                            {mode === 'signup' && (<div className="flex items-center gap-2"><I.bulb /><input type="text" className="w-full border rounded-lg px-3 py-2" placeholder="이름(선택)" value={name} onChange={e => setName(e.target.value)} /></div>)}
+                            <div className="flex items-center gap-2"><I.key /><input type="password" className="w-full border rounded-lg px-3 py-2" placeholder="비밀번호" value={password} onChange={e => setPassword(e.target.value)} required /></div>
+
+                            {/* ⬇️ 여기서만 친절하게 안내 (얼럿 X) */}
+                            {errorMsg && <p className="text-sm text-rose-600 -mt-2">{errorMsg}</p>}
+
+                            <button type="submit" className="w-full py-2.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold disabled:opacity-60" disabled={loading}>
+                                {loading ? '처리 중…' : (mode === 'signup' ? '회원가입' : '로그인')}
+                            </button>
+                        </form>
+                    </Card>
+                </div>
+            );
+        }
+
+        /* ---------- App 루트 ---------- */
+        function App() {
+            const [user, setUser] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+            });
+            const [view, setView] = useState('reports');
+            const [reports, setReports] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [selectedReport, setSelectedReport] = useState(null);
+            const [selectedGene, setSelectedGene] = useState(null);
+            const [currentData, setCurrentData] = useState(SAMPLE_CURRENT_DATA);
+            const [showNewModal, setShowNewModal] = useState(false);
+            const [saving, setSaving] = useState(false);
+
+            useEffect(() => {
+                if (!user) return;
+                (async () => {
+                    setLoading(true);
+                    try {
+                        const items = await apiGetReports(user.userId);
+                        setReports(items);
+                    } catch (e) {
+                        alert('목록을 불러오지 못했습니다: ' + (e.message || String(e)));
+                    } finally {
+                        setLoading(false);
+                    }
+                })();
+            }, [user]);
+
+            function onAuthed(u) {
+                localStorage.setItem('user', JSON.stringify(u));
+                setUser(u);
+            }
+            function onLogout() {
+                localStorage.removeItem('user');
+                setUser(null);
+                setReports([]);
+                setView('reports');
+            }
+
+            async function handleCreateNew() {
+                setShowNewModal(true);
+            }
+
+            async function saveNewAnalysis(withData) {
+                if (saving) return;
+                try {
+                    setSaving(true);
+                    setLoading(true);
+
+                    // genes map
+                    const genes = {};
+                    ['aging', 'dryness', 'pigmentation'].forEach(cat => {
+                        withData.biomarkers[cat].forEach(m => { genes[m.gene] = Number(m.value); });
+                    });
+
+                    const overall = calcOverallScoreFromSample(withData);
+                    const now = new Date();
+                    const yyyy = now.getFullYear();
+                    const mm = String(now.getMonth() + 1).padStart(2, '0');
+                    const dd = String(now.getDate()).padStart(2, '0');
+
+                    const newRow = {
+                        id: crypto.randomUUID(),
+                        date: `${yyyy}-${mm}-${dd}`,
+                        week: 0,
+                        title: withData.title || '새 분석',
+                        overallScore: overall,
+                        status: 'completed',
+                        ...genes,
+                        userId: user.userId
+                    };
+
+                    await apiCreateReport(newRow);
+                    const items = await apiGetReports(user.userId);
+                    setReports(items);
+
+                    setSelectedReport(newRow);
+                    setCurrentData(buildDataFromReport({ ...newRow, genes }));
+                    setView('analysis');
+
+                    alert('저장이 완료되었습니다.');
+                } catch (e) {
+                    alert('새 분석 저장 실패: ' + (e.message || String(e)));
+                } finally {
+                    setLoading(false);
+                    setSaving(false);
+                    setShowNewModal(false);
+                }
+            }
+
+            function openReport(r) {
+                setSelectedReport(r);
+                setCurrentData(buildDataFromReport(r));
+                setView('analysis');
+            }
+
+            async function handleDelete() {
+                if (!selectedReport) return;
+                const ok = confirm('이 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.');
+                if (!ok) return;
+                try {
+                    await apiDeleteReport(selectedReport.id, user.userId);
+                    const items = await apiGetReports(user.userId);
+                    setReports(items);
+                    setSelectedReport(null);
+                    setView('reports');
+                    alert('삭제되었습니다.');
+                } catch (e) {
+                    alert('삭제 실패: ' + (e.message || String(e)));
+                }
+            }
+
+            if (!user) return <AuthView onAuthed={onAuthed} />;
+
+            return (
+                <>
+                    {view === 'reports' && (
+                        <ReportsListView
+                            reports={reports}
+                            onOpenReport={openReport}
+                            onOpenComparison={() => setView('comparison')}
+                            onCreateNew={handleCreateNew}
+                            loading={loading}
+                            user={user}
+                            onLogout={onLogout}
+                        />
+                    )}
+
+                    {view === 'analysis' && (
+                        <AnalysisResultView
+                            data={currentData}
+                            report={selectedReport}
+                            onBack={() => setView('reports')}
+                            onOpenComparison={() => setView('comparison')}
+                            onOpenRecommendations={() => setView('recommendations')}
+                            onOpenRoutine={() => setView('routine')}
+                            onSelectGene={setSelectedGene}
+                            onDelete={handleDelete}
+                        />
+                    )}
+
+                    {view === 'comparison' && (
+                        <ComparisonView
+                            onBack={() => setView('reports')}
+                            reports={reports}
+                            current={currentData}
+                        />
+                    )}
+
+                    {view === 'recommendations' && (
+                        <RecommendationsView
+                            onBack={() => setView('analysis')}
+                            current={currentData}   // ✅ 현재 분석값 전달
+                        />
+                    )}
+
+                    {selectedGene && <GeneDetailModal gene={selectedGene} onClose={() => setSelectedGene(null)} />}
+
+                    {showNewModal && (
+                        <NewAnalysisModal
+                            initialData={{ ...currentData, userId: user.userId }}
+                            onCancel={() => setShowNewModal(false)}
+                            onConfirm={saveNewAnalysis}
+                            saving={saving}
+                        />
+                    )}
+                </>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
